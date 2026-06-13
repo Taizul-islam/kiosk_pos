@@ -1,10 +1,44 @@
+# Flutter
 build/
 .dart_tool/
 .packages
 *.apk
 *.ipa
+.flutter-plugins
+.flutter-plugins-dependencies
+.pub-cache/
+.pub/
+
+# Android
+*.iml
+.gradle/
+local.properties
+key.properties
+
+# iOS
+ios/Pods/
+ios/.symlinks/
+*.xcworkspace
+*.xcuserdata
+
+# Web
 node_modules/
 .next/
+out/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+
+# Environment
 .env
+.env.local
+
+# Logs
 *.log
+
+# macOS
 .DS_Store
