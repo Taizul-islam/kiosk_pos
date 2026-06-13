@@ -1,0 +1,10 @@
+build/
+.dart_tool/
+.packages
+*.apk
+*.ipa
+node_modules/
+.next/
+.env
+*.log
+.DS_Store
