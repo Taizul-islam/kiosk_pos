@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../config/theme.dart';
+import '../../data/services/printer_service.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -10,27 +11,36 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
+  // Store
   final _storeNameController = TextEditingController(text: 'Burger House');
   final _storeAddressController = TextEditingController(text: '123 Main Street, Kingstown');
   final _storePhoneController = TextEditingController(text: '+1-784-123-4567');
   final _taxController = TextEditingController(text: '15');
   final _currencyController = TextEditingController(text: '\$');
 
-  // Receipt Printer
-  final _receiptPrinterNameController = TextEditingController(text: 'Receipt Printer');
-  final _receiptPrinterIpController = TextEditingController(text: '192.168.1.100');
-  final _receiptPrinterPortController = TextEditingController(text: '9100');
-  String _receiptPrinterType = 'network';
-  bool _receiptAutoPrint = true;
-  String _receiptPaperSize = '80mm';
+  // Printer Services
+  final PrinterService _receiptPrinter = PrinterService(id: 'receipt');
+  final PrinterService _kitchenPrinter = PrinterService(id: 'kitchen');
 
-  // Kitchen Printer
-  final _kitchenPrinterNameController = TextEditingController(text: 'Kitchen Printer');
-  final _kitchenPrinterIpController = TextEditingController(text: '192.168.1.101');
-  final _kitchenPrinterPortController = TextEditingController(text: '9100');
-  String _kitchenPrinterType = 'network';
+  // Receipt Printer controllers
+  final _receiptPrinterIpController = TextEditingController();
+  final _receiptPrinterPortController = TextEditingController();
+  bool _receiptAutoPrint = true;
+
+  // Kitchen Printer controllers
+  final _kitchenPrinterIpController = TextEditingController();
+  final _kitchenPrinterPortController = TextEditingController();
   bool _kitchenAutoPrint = true;
-  String _kitchenPaperSize = '80mm';
+
+  @override
+  void initState() {
+    super.initState();
+    // Load saved IP/Port into controllers
+    _receiptPrinterIpController.text = _receiptPrinter.ipAddress.value;
+    _receiptPrinterPortController.text = _receiptPrinter.port.value;
+    _kitchenPrinterIpController.text = _kitchenPrinter.ipAddress.value;
+    _kitchenPrinterPortController.text = _kitchenPrinter.port.value;
+  }
 
   @override
   void dispose() {
@@ -39,25 +49,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _storePhoneController.dispose();
     _taxController.dispose();
     _currencyController.dispose();
-    _receiptPrinterNameController.dispose();
     _receiptPrinterIpController.dispose();
     _receiptPrinterPortController.dispose();
-    _kitchenPrinterNameController.dispose();
     _kitchenPrinterIpController.dispose();
     _kitchenPrinterPortController.dispose();
     super.dispose();
-  }
-
-  void _testPrint(String printerName, String ip) {
-    Get.snackbar(
-      '🖨️ Test Print Sent',
-      'Test ticket sent to $printerName at $ip',
-      snackPosition: SnackPosition.BOTTOM,
-      backgroundColor: AppColors.reading,
-      colorText: Colors.white,
-      margin: const EdgeInsets.all(16),
-      borderRadius: 12,
-    );
   }
 
   @override
@@ -125,74 +121,68 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       style: TextStyle(fontSize: size.width * 0.026, color: Colors.grey.shade500)),
                   SizedBox(height: size.height * 0.015),
 
-                  _buildTextField(_receiptPrinterNameController, 'Printer Name', Icons.print_rounded, size),
+                  // Connection Status
+                  _buildPrinterStatus(_receiptPrinter, size),
                   SizedBox(height: size.height * 0.015),
 
-                  // Connection type
-                  _buildLabel('Connection Type', size),
-                  SizedBox(height: size.height * 0.01),
-                  Row(children: [
-                    _buildTypeChip('Network', 'network', _receiptPrinterType, (v) => setState(() => _receiptPrinterType = v), size),
-                    SizedBox(width: size.width * 0.03),
-                    _buildTypeChip('USB', 'usb', _receiptPrinterType, (v) => setState(() => _receiptPrinterType = v), size),
-                    SizedBox(width: size.width * 0.03),
-                    _buildTypeChip('Serial', 'serial', _receiptPrinterType, (v) => setState(() => _receiptPrinterType = v), size),
-                  ]),
-                  SizedBox(height: size.height * 0.015),
-
-                  if (_receiptPrinterType == 'network') ...[
-                    Row(children: [
-                      Expanded(
-                        flex: 3,
-                        child: _buildTextField(_receiptPrinterIpController, 'IP Address', Icons.wifi_rounded, size),
-                      ),
-                      SizedBox(width: size.width * 0.04),
-                      Expanded(
-                        flex: 2,
-                        child: _buildTextField(_receiptPrinterPortController, 'Port', Icons.settings_ethernet_rounded, size, keyboardType: TextInputType.number),
-                      ),
-                    ]),
-                  ],
-                  if (_receiptPrinterType == 'usb') ...[
-                    _buildTextField(TextEditingController(text: 'USB001'), 'USB Port', Icons.usb_rounded, size),
-                  ],
-                  if (_receiptPrinterType == 'serial') ...[
-                    _buildTextField(TextEditingController(text: 'COM1'), 'Serial Port', Icons.cable_rounded, size),
-                  ],
-                  SizedBox(height: size.height * 0.015),
-
-                  // Paper size & auto print
+                  // IP + Port
                   Row(children: [
                     Expanded(
-                      child: _buildDropdown('Paper', _receiptPaperSize, ['58mm', '80mm'], (v) => setState(() => _receiptPaperSize = v!), size),
+                      flex: 3,
+                      child: _buildTextField(
+                        _receiptPrinterIpController, 'IP Address', Icons.wifi_rounded, size,
+                        onChanged: (v) => _receiptPrinter.ipAddress.value = v,
+                      ),
                     ),
                     SizedBox(width: size.width * 0.04),
                     Expanded(
-                      child: SwitchListTile(
-                        contentPadding: EdgeInsets.zero,
-                        dense: true,
-                        title: Text('Auto Print', style: TextStyle(fontSize: size.width * 0.03)),
-                        value: _receiptAutoPrint,
-                        onChanged: (v) => setState(() => _receiptAutoPrint = v),
-                        activeColor: AppColors.accent,
+                      flex: 2,
+                      child: _buildTextField(
+                        _receiptPrinterPortController, 'Port', Icons.settings_ethernet_rounded, size,
+                        keyboardType: TextInputType.number,
+                        onChanged: (v) => _receiptPrinter.port.value = v,
                       ),
                     ),
                   ]),
+                  SizedBox(height: size.height * 0.015),
+
+                  // Auto print toggle
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    dense: true,
+                    title: Text('Auto Print Receipt', style: TextStyle(fontSize: size.width * 0.03)),
+                    value: _receiptAutoPrint,
+                    onChanged: (v) => setState(() => _receiptAutoPrint = v),
+                    activeColor: AppColors.accent,
+                  ),
                   SizedBox(height: size.height * 0.01),
-                  // Test print button
+
+                  // Test & Save button
                   SizedBox(
                     width: double.infinity,
-                    child: OutlinedButton.icon(
-                      onPressed: () => _testPrint(_receiptPrinterNameController.text, _receiptPrinterIpController.text),
-                      icon: Icon(Icons.print_rounded, size: size.width * 0.04),
-                      label: Text('Test Receipt Print', style: TextStyle(fontSize: size.width * 0.03)),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: AppColors.primary,
-                        side: BorderSide(color: AppColors.primary.withOpacity(0.5)),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                        padding: EdgeInsets.symmetric(vertical: size.height * 0.014),
-                      ),
-                    ),
+                    child: Obx(() {
+                      return ElevatedButton.icon(
+                        onPressed: _receiptPrinter.isTesting.value
+                            ? null
+                            : () async => await _receiptPrinter.testConnection(),
+                        icon: _receiptPrinter.isTesting.value
+                            ? SizedBox(
+                          width: size.width * 0.04, height: size.width * 0.04,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                        )
+                            : Icon(Icons.wifi_find_rounded, size: size.width * 0.04),
+                        label: Text(
+                          _receiptPrinter.isTesting.value ? 'Testing...' : 'TEST & SAVE CONNECTION',
+                          style: TextStyle(fontSize: size.width * 0.032, fontWeight: FontWeight.bold),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: _receiptPrinter.isConnected.value ? AppColors.accent : AppColors.primary,
+                          disabledBackgroundColor: Colors.grey.shade300,
+                          padding: EdgeInsets.symmetric(vertical: size.height * 0.016),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                      );
+                    }),
                   ),
                   SizedBox(height: size.height * 0.03),
 
@@ -203,78 +193,120 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       style: TextStyle(fontSize: size.width * 0.026, color: Colors.grey.shade500)),
                   SizedBox(height: size.height * 0.015),
 
-                  _buildTextField(_kitchenPrinterNameController, 'Printer Name', Icons.print_rounded, size),
+                  // Connection Status
+                  _buildPrinterStatus(_kitchenPrinter, size),
                   SizedBox(height: size.height * 0.015),
 
-                  _buildLabel('Connection Type', size),
-                  SizedBox(height: size.height * 0.01),
-                  Row(children: [
-                    _buildTypeChip('Network', 'network', _kitchenPrinterType, (v) => setState(() => _kitchenPrinterType = v), size),
-                    SizedBox(width: size.width * 0.03),
-                    _buildTypeChip('USB', 'usb', _kitchenPrinterType, (v) => setState(() => _kitchenPrinterType = v), size),
-                    SizedBox(width: size.width * 0.03),
-                    _buildTypeChip('Serial', 'serial', _kitchenPrinterType, (v) => setState(() => _kitchenPrinterType = v), size),
-                  ]),
-                  SizedBox(height: size.height * 0.015),
-
-                  if (_kitchenPrinterType == 'network') ...[
-                    Row(children: [
-                      Expanded(
-                        flex: 3,
-                        child: _buildTextField(_kitchenPrinterIpController, 'IP Address', Icons.wifi_rounded, size),
-                      ),
-                      SizedBox(width: size.width * 0.04),
-                      Expanded(
-                        flex: 2,
-                        child: _buildTextField(_kitchenPrinterPortController, 'Port', Icons.settings_ethernet_rounded, size, keyboardType: TextInputType.number),
-                      ),
-                    ]),
-                  ],
-                  if (_kitchenPrinterType == 'usb') ...[
-                    _buildTextField(TextEditingController(text: 'USB002'), 'USB Port', Icons.usb_rounded, size),
-                  ],
-                  if (_kitchenPrinterType == 'serial') ...[
-                    _buildTextField(TextEditingController(text: 'COM2'), 'Serial Port', Icons.cable_rounded, size),
-                  ],
-                  SizedBox(height: size.height * 0.015),
-
+                  // IP + Port
                   Row(children: [
                     Expanded(
-                      child: _buildDropdown('Paper', _kitchenPaperSize, ['58mm', '80mm'], (v) => setState(() => _kitchenPaperSize = v!), size),
+                      flex: 3,
+                      child: _buildTextField(
+                        _kitchenPrinterIpController, 'IP Address', Icons.wifi_rounded, size,
+                        onChanged: (v) => _kitchenPrinter.ipAddress.value = v,
+                      ),
                     ),
                     SizedBox(width: size.width * 0.04),
                     Expanded(
-                      child: SwitchListTile(
-                        contentPadding: EdgeInsets.zero,
-                        dense: true,
-                        title: Text('Auto Print', style: TextStyle(fontSize: size.width * 0.03)),
-                        value: _kitchenAutoPrint,
-                        onChanged: (v) => setState(() => _kitchenAutoPrint = v),
-                        activeColor: AppColors.accent,
+                      flex: 2,
+                      child: _buildTextField(
+                        _kitchenPrinterPortController, 'Port', Icons.settings_ethernet_rounded, size,
+                        keyboardType: TextInputType.number,
+                        onChanged: (v) => _kitchenPrinter.port.value = v,
                       ),
                     ),
                   ]),
+                  SizedBox(height: size.height * 0.015),
+
+                  // Auto print toggle
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    dense: true,
+                    title: Text('Auto Print Kitchen', style: TextStyle(fontSize: size.width * 0.03)),
+                    value: _kitchenAutoPrint,
+                    onChanged: (v) => setState(() => _kitchenAutoPrint = v),
+                    activeColor: AppColors.error,
+                  ),
                   SizedBox(height: size.height * 0.01),
+
+                  // Test & Save button
                   SizedBox(
                     width: double.infinity,
-                    child: OutlinedButton.icon(
-                      onPressed: () => _testPrint(_kitchenPrinterNameController.text, _kitchenPrinterIpController.text),
-                      icon: Icon(Icons.print_rounded, size: size.width * 0.04),
-                      label: Text('Test Kitchen Print', style: TextStyle(fontSize: size.width * 0.03)),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: AppColors.error,
-                        side: BorderSide(color: AppColors.error.withOpacity(0.5)),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                        padding: EdgeInsets.symmetric(vertical: size.height * 0.014),
-                      ),
-                    ),
+                    child: Obx(() {
+                      return ElevatedButton.icon(
+                        onPressed: _kitchenPrinter.isTesting.value
+                            ? null
+                            : () async => await _kitchenPrinter.testConnection(),
+                        icon: _kitchenPrinter.isTesting.value
+                            ? SizedBox(
+                          width: size.width * 0.04, height: size.width * 0.04,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                        )
+                            : Icon(Icons.wifi_find_rounded, size: size.width * 0.04),
+                        label: Text(
+                          _kitchenPrinter.isTesting.value ? 'Testing...' : 'TEST & SAVE CONNECTION',
+                          style: TextStyle(fontSize: size.width * 0.032, fontWeight: FontWeight.bold),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: _kitchenPrinter.isConnected.value ? AppColors.accent : AppColors.error,
+                          disabledBackgroundColor: Colors.grey.shade300,
+                          padding: EdgeInsets.symmetric(vertical: size.height * 0.016),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                      );
+                    }),
                   ),
                   SizedBox(height: size.height * 0.04),
                 ]),
               ),
             ),
 
-            // Save button
+            // ============ TEST PRINT BUTTONS ============
+            Container(
+              padding: EdgeInsets.all(size.width * 0.04),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 10, offset: const Offset(0, -3))],
+              ),
+              child: SafeArea(
+                top: false,
+                child: Row(children: [
+                  Expanded(
+                    child: Obx(() {
+                      return ElevatedButton.icon(
+                        onPressed: _receiptPrinter.isConnected.value ? _testReceiptPrint : null,
+                        icon: Icon(Icons.receipt_long_rounded, size: size.width * 0.04),
+                        label: Text('Test Receipt', style: TextStyle(fontSize: size.width * 0.03, fontWeight: FontWeight.bold)),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: _receiptPrinter.isConnected.value ? AppColors.primary : Colors.grey.shade300,
+                          disabledBackgroundColor: Colors.grey.shade200,
+                          padding: EdgeInsets.symmetric(vertical: size.height * 0.016),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                      );
+                    }),
+                  ),
+                  SizedBox(width: size.width * 0.03),
+                  Expanded(
+                    child: Obx(() {
+                      return ElevatedButton.icon(
+                        onPressed: _kitchenPrinter.isConnected.value ? _testKitchenPrint : null,
+                        icon: Icon(Icons.restaurant_rounded, size: size.width * 0.04),
+                        label: Text('Test Kitchen', style: TextStyle(fontSize: size.width * 0.03, fontWeight: FontWeight.bold)),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: _kitchenPrinter.isConnected.value ? AppColors.error : Colors.grey.shade300,
+                          disabledBackgroundColor: Colors.grey.shade200,
+                          padding: EdgeInsets.symmetric(vertical: size.height * 0.016),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                      );
+                    }),
+                  ),
+                ]),
+              ),
+            ),
+
+            // ============ SAVE SETTINGS ============
             Container(
               padding: EdgeInsets.all(size.width * 0.04),
               decoration: BoxDecoration(color: Colors.white, boxShadow: [
@@ -282,8 +314,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ]),
               child: SafeArea(
                 child: SizedBox(
-                  width: double.infinity,
-                  height: size.height * 0.065,
+                  width: double.infinity, height: size.height * 0.065,
                   child: ElevatedButton(
                     onPressed: () {
                       Get.snackbar('✅ Settings Saved!', 'All settings have been updated',
@@ -309,20 +340,61 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
+  // ==================== PRINTER STATUS INDICATOR ====================
+  Widget _buildPrinterStatus(PrinterService printer, Size size) {
+    return Obx(() {
+      return Container(
+        width: double.infinity,
+        padding: EdgeInsets.all(size.width * 0.035),
+        decoration: BoxDecoration(
+          color: printer.isConnected.value
+              ? AppColors.accent.withOpacity(0.08)
+              : printer.ipAddress.isEmpty
+              ? Colors.grey.shade50
+              : AppColors.error.withOpacity(0.08),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: printer.isConnected.value
+                ? AppColors.accent.withOpacity(0.3)
+                : printer.ipAddress.isEmpty
+                ? Colors.grey.shade200
+                : AppColors.error.withOpacity(0.3),
+          ),
+        ),
+        child: Row(children: [
+          Container(
+            width: size.width * 0.035, height: size.width * 0.035,
+            decoration: BoxDecoration(
+              color: printer.isConnected.value
+                  ? AppColors.accent
+                  : printer.ipAddress.isEmpty
+                  ? Colors.grey.shade400
+                  : AppColors.error,
+              shape: BoxShape.circle,
+            ),
+          ),
+          SizedBox(width: size.width * 0.025),
+          Expanded(
+            child: Text(printer.statusText,
+                style: TextStyle(fontSize: size.width * 0.033, fontWeight: FontWeight.bold, color: printer.statusColor)),
+          ),
+        ]),
+      );
+    });
+  }
+
+  // ==================== WIDGET BUILDERS ====================
   Widget _buildSectionHeader(String title, Size size) {
     return Text(title,
         style: TextStyle(fontSize: size.width * 0.04, fontWeight: FontWeight.bold, color: AppColors.textPrimary));
   }
 
-  Widget _buildLabel(String text, Size size) {
-    return Text(text, style: TextStyle(fontSize: size.width * 0.032, fontWeight: FontWeight.w500, color: Colors.grey.shade700));
-  }
-
   Widget _buildTextField(TextEditingController controller, String label, IconData icon, Size size,
-      {TextInputType keyboardType = TextInputType.text}) {
+      {TextInputType keyboardType = TextInputType.text, Function(String)? onChanged}) {
     return TextField(
       controller: controller,
       keyboardType: keyboardType,
+      onChanged: onChanged,
       decoration: InputDecoration(
         labelText: label,
         labelStyle: TextStyle(fontSize: size.width * 0.03),
@@ -334,43 +406,54 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  Widget _buildTypeChip(String label, String value, String selected, Function(String) onChanged, Size size) {
-    final isSelected = selected == value;
-    return GestureDetector(
-      onTap: () => onChanged(value),
-      child: Container(
-        padding: EdgeInsets.symmetric(horizontal: size.width * 0.04, vertical: size.height * 0.012),
-        decoration: BoxDecoration(
-          color: isSelected ? AppColors.primary : Colors.white,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: isSelected ? AppColors.primary : Colors.grey.shade300),
-        ),
-        child: Text(label,
-            style: TextStyle(
-                fontSize: size.width * 0.03,
-                fontWeight: FontWeight.w500,
-                color: isSelected ? Colors.white : Colors.grey.shade700)),
-      ),
+  // ==================== TEST PRINT METHODS ====================
+  void _testReceiptPrint() async {
+    final success = await _receiptPrinter.printReceipt(
+      orderNumber: 'TEST-001',
+      customerName: 'Test Customer',
+      items: [
+        {'name': 'Classic Burger', 'qty': 2, 'price': 12.00},
+        {'name': 'French Fries', 'qty': 1, 'price': 5.00},
+        {'name': 'Soda', 'qty': 2, 'price': 3.00},
+      ],
+      subtotal: 35.00,
+      tax: 5.25,
+      total: 40.25,
+      paymentMethod: 'CARD',
+    );
+
+    Get.snackbar(
+      success ? '✅ Receipt Test Sent!' : '❌ Print Failed',
+      success ? 'Check the printer for output' : 'Could not connect to printer',
+      snackPosition: SnackPosition.BOTTOM,
+      backgroundColor: success ? AppColors.accent : AppColors.error,
+      colorText: Colors.white,
+      margin: const EdgeInsets.all(16),
+      borderRadius: 12,
     );
   }
 
-  Widget _buildDropdown(String label, String value, List<String> items, Function(String?) onChanged, Size size) {
-    return Container(
-      padding: EdgeInsets.symmetric(horizontal: size.width * 0.03),
-      decoration: BoxDecoration(
-        border: Border.all(color: Colors.grey.shade300),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<String>(
-          value: value,
-          isExpanded: true,
-          items: items
-              .map((item) => DropdownMenuItem(value: item, child: Text(item, style: TextStyle(fontSize: size.width * 0.03))))
-              .toList(),
-          onChanged: onChanged,
-        ),
-      ),
+  void _testKitchenPrint() async {
+    final success = await _kitchenPrinter.printKitchenTicket(
+      orderNumber: 'TEST-K01',
+      customerName: 'Test Customer',
+      tableNumber: '5',
+      orderType: 'dine_in',
+      items: [
+        {'name': 'Classic Burger', 'qty': 2, 'modifiers': 'Medium, Extra Cheese'},
+        {'name': 'French Fries', 'qty': 1, 'modifiers': 'Large'},
+        {'name': 'Soda', 'qty': 2, 'modifiers': 'Coca-Cola'},
+      ],
+    );
+
+    Get.snackbar(
+      success ? '✅ Kitchen Test Sent!' : '❌ Print Failed',
+      success ? 'Check the printer for output' : 'Could not connect to printer',
+      snackPosition: SnackPosition.BOTTOM,
+      backgroundColor: success ? AppColors.accent : AppColors.error,
+      colorText: Colors.white,
+      margin: const EdgeInsets.all(16),
+      borderRadius: 12,
     );
   }
 }
